@@ -16,6 +16,11 @@ find_package(catkin REQUIRED COMPONENTS
 ## See http://ros.org/doc/api/catkin/html/user_guide/setup_dot_py.html
 catkin_python_setup()
 
+add_service_files(
+  FILES
+  ExecPredefTraj.srv
+)
+
 generate_messages(
   DEPENDENCIES
   std_msgs

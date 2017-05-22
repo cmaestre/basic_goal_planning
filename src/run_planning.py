@@ -5,7 +5,7 @@ Created on Thu May 18 15:56:51 2017
 @author: maestre
 """
 
-#from __future__ import print_function
+from __future__ import print_function
 
 import matplotlib.pyplot as plt
 from matplotlib import colors
@@ -13,6 +13,10 @@ import matplotlib.animation as animation
 import numpy as np
 import matplotlib.patches as patches
 import copy
+import rospy
+
+from basic_goal_planning.srv import *
+from baxter_kinematics.srv import *
 
 ''' Find path from env 0 to env goal '''
 def find_path(transitions_vector,
@@ -48,42 +52,7 @@ def find_path(transitions_vector,
     action_vector.reverse()
     return path, action_vector
 
-def plot_scenario():
-    fig = plt.figure(num=None, figsize=(8, 6), facecolor='w', edgecolor='k')
-    ax = fig.add_subplot(111, aspect='equal')
-    p1 = plt.Rectangle((0.1, 0.4),0.2, 0.2, fc='b', zorder=0)
-    p2 = plt.Rectangle((0.4, 0.4),0.2, 0.2, fc='b', zorder=0)
-    p3 = plt.Rectangle((0.7, 0.4),0.2, 0.2, fc='b', zorder=0)
-#    pointer = plt.Circle((0.5,0.1), 0.02, fc = 'k', zorder=10)
-    plt.axis('off')
-#    return pointer
-    ax.add_patch(p1)    
-    ax.add_patch(p2)
-    ax.add_patch(p3)
-    
-    return ax
-    
-
-def main(): 
-
-    actions = {'a1':'l_far',
-               'a2':'l_close',
-               'a3':'push_red_button',
-               'a4':'push_green_button'}
-               
-    env_state = {0:'lever_off',
-                 1:'lever_on',
-                 2:'red_pushed',
-                 3:'green_pushed'}
-    
-    ## prev_state, action, next_state
-#    transitions_vector = [(0, 'a1', 1),
-#                        (1, 'a2', 0),
-#                        (1, 'a3', 2),
-#                        (2, 'a2', 0),
-#                        (2, 'a4', 3)]
-    
-    transitions_vector = []
+def compute_transition_vector_python(transitions_vector):
     lines = open('dataset.txt', 'r').readlines()
     for line in lines:
         values_vector = line.split(' ')
@@ -93,11 +62,19 @@ def main():
                                 round(float(values_vector[2]),3)])
         curr_transition.append(int(values_vector[3]))
         transitions_vector.append(curr_transition)
-    path, action_vector = find_path(transitions_vector, 3)
-    print(path)
-    print(action_vector)
-    
-    ax = plot_scenario()
+    return transitions_vector
+
+def plot_python(action_vector):
+    fig = plt.figure(num=None, figsize=(8, 6), facecolor='w', edgecolor='k')
+    ax = fig.add_subplot(111, aspect='equal')
+    p1 = plt.Rectangle((0.1, 0.4),0.2, 0.2, fc='b', zorder=0)
+    p2 = plt.Rectangle((0.4, 0.4),0.2, 0.2, fc='b', zorder=0)
+    p3 = plt.Rectangle((0.7, 0.4),0.2, 0.2, fc='b', zorder=0)
+    plt.axis('off')
+    ax.add_patch(p1)    
+    ax.add_patch(p2)
+    ax.add_patch(p3)
+
     c1 = plt.Circle((action_vector[0][1],
                      action_vector[0][0]), 
                      0.02, fc = 'green', zorder=10)
@@ -109,20 +86,66 @@ def main():
     c3 = plt.Circle((action_vector[2][1],
                      action_vector[2][0]), 
                      0.02, fc = 'magenta', zorder=10)
-    ax.add_patch(c3)
+    ax.add_patch(c3)    
+
+def main(goal_state): 
+               
+    env_state = {0:'lever_off',
+                 1:'lever_on',
+                 2:'red_pushed',
+                 3:'green_pushed'}
     
-#    for traj_id in path:
-#        rospy.wait_for_service('run_predef_traj')
-#        try:
-#            run_traj = rospy.ServiceProxy('run_predef_traj', RunPredefTraj)
-#            resp1 = run_traj(id_traj)
-#            return resp1.sum
-#        except rospy.ServiceException, e:
-#            print "Service call failed: %s"%e                 
+    ''' Compute planning '''    
+    ## prev_state, action, next_state
+    real_robot = True
+    if real_robot:
+        transitions_vector_predef = [(0, 0, 1),
+                                     (1, 1, 0),
+                                     (1, 2, 2),
+                                     (2, 1, 0),
+                                     (2, 3, 3),
+                                     (3, 1, 0)]
+        path, action_vector = find_path(transitions_vector_predef, goal_state)
+
+        ''' Reset robot '''
+        rospy.wait_for_service('baxter_kinematics/restart_robot')
+        try:
+            reset_robot = rospy.ServiceProxy('baxter_kinematics/restart_robot', RestartRobot)
+            resp1 = reset_robot()
+    #            return resp1.sum
+        except rospy.ServiceException, e:
+            print ("Service call failed: %s"%e)
+            return 0    
+        
+        ''' Reset environent '''
+    
+        ''' Execute planning '''
+        for traj_id in action_vector:
+            rospy.wait_for_service('planning/exec_predef_traj')
+            try:
+                run_traj = rospy.ServiceProxy('planning/exec_predef_traj', ExecPredefTraj)
+                resp1 = run_traj(traj_id)
+    #            return resp1.sum
+            except rospy.ServiceException, e:
+                print ("Service call failed: %s"%e)
+                return 0
+        return 1        
+        
+    else:
+        transitions_vector_python = []
+        transitions_vector_python = compute_transition_vector_python(transitions_vector_python)   
+        path, action_vector = find_path(transitions_vector_python, goal_state)
+        plot_python(action_vector)
+    
+    print(path)
+    print(action_vector)
+
+
 
 
 if __name__ == '__main__':
-    main()
+    goal_state = 3    
+    main(goal_state)
     
     
     
