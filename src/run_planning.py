@@ -14,6 +14,7 @@ import numpy as np
 import matplotlib.patches as patches
 import copy
 import rospy
+import time
 
 from basic_goal_planning.srv import *
 from baxter_kinematics.srv import *
@@ -46,8 +47,7 @@ def find_path(transitions_vector,
             else:                
                 tmp_goal = curr_trans[0]
                 path.append(tmp_goal)
-
-    print('path_found')
+    
     path.reverse()
     action_vector.reverse()
     return path, action_vector
@@ -106,6 +106,7 @@ def main(goal_state):
                                      (2, 3, 3),
                                      (3, 1, 0)]
         path, action_vector = find_path(transitions_vector_predef, goal_state)
+        print('path_found')
 
         ''' Reset robot '''
         rospy.wait_for_service('baxter_kinematics/restart_robot')
@@ -117,7 +118,7 @@ def main(goal_state):
             print ("Service call failed: %s"%e)
             return 0    
         
-        ''' Reset environent '''
+        ''' Reset environment '''
     
         ''' Execute planning '''
         for traj_id in action_vector:
@@ -125,11 +126,10 @@ def main(goal_state):
             try:
                 run_traj = rospy.ServiceProxy('planning/exec_predef_traj', ExecPredefTraj)
                 resp1 = run_traj(traj_id)
-    #            return resp1.sum
             except rospy.ServiceException, e:
                 print ("Service call failed: %s"%e)
                 return 0
-        return 1        
+#        return 1        
         
     else:
         transitions_vector_python = []
@@ -139,8 +139,18 @@ def main(goal_state):
     
     print(path)
     print(action_vector)
+        
+    ''' Turn everything off '''
+#    time.sleep(3)    
+    rospy.wait_for_service('planning/exec_predef_traj')
+    try:
+        run_traj = rospy.ServiceProxy('planning/exec_predef_traj', ExecPredefTraj)
+        resp1 = run_traj(1)
+    except rospy.ServiceException, e:
+        print ("Service call failed: %s"%e)
+        return 0
 
-
+    return 1
 
 
 if __name__ == '__main__':
